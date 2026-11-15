@@ -1,0 +1,172 @@
+import os
+
+import matplotlib
+matplotlib.use("Agg")            # no display in CI; must precede pyplot import
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from perfthreshold import calibrate, fit, groups, load, plots, rule
+from tests import synthetic
+
+
+def _band_row(k=4.0):
+    raw = synthetic.make_book(n_per_month=300, months=12, seed=41)
+    df, _ = load.prepare(raw)
+    resolved, _ = groups.resolve(df, scope="all")
+    res = fit.fit_cells(resolved, k=k, min_cell_n=100)
+    row = res.bands.set_index("cell_key").loc["VWAP|ALL"]
+    values = resolved.loc[resolved["cell_key"] == "VWAP|ALL",
+                          "perf_in_spreads"].to_numpy(dtype=float)
+    return values, row
+
+
+def test_clip_counts_both_overflows_and_clamps_the_values():
+    x = np.array([-100.0, -1.0, 0.0, 1.0, 100.0])
+    clipped, below, above = plots.clip_with_overflow(x, -2.0, 2.0)
+    assert below == 1 and above == 1
+    assert clipped.min() == -2.0 and clipped.max() == 2.0
+    assert len(clipped) == len(x)
+
+
+def test_clip_ignores_non_finite_values():
+    x = np.array([np.nan, np.inf, 0.0])
+    clipped, below, above = plots.clip_with_overflow(x, -1.0, 1.0)
+    assert len(clipped) == 1 and below == 0 and above == 0
+
+
+def test_clip_with_no_overflow_reports_zeroes():
+    x = np.array([-0.5, 0.0, 0.5])
+    _, below, above = plots.clip_with_overflow(x, -1.0, 1.0)
+    assert below == 0 and above == 0
+
+
+def test_distribution_writes_a_non_empty_png(tmp_path):
+    values, row = _band_row()
+    out = plots.distribution(values, row, str(tmp_path / "d.png"),
+                             title="VWAP | ALL")
+    assert os.path.exists(out)
+    assert os.path.getsize(out) > 5_000
+
+
+def test_distribution_creates_a_missing_directory(tmp_path):
+    values, row = _band_row()
+    out = plots.distribution(values, row,
+                             str(tmp_path / "deep" / "nested" / "d.png"),
+                             title="VWAP | ALL")
+    assert os.path.exists(out)
+
+
+def test_distribution_handles_an_unfitted_band_without_crashing(tmp_path):
+    values, row = _band_row()
+    row = row.copy()
+    row["lo"] = np.nan
+    row["hi"] = np.nan
+    out = plots.distribution(values, row, str(tmp_path / "d.png"),
+                             title="unfitted")
+    assert os.path.exists(out)
+
+
+def test_distribution_accepts_a_scored_month_overlay(tmp_path):
+    values, row = _band_row()
+    month = values[:200] * 1.2
+    out = plots.distribution(values, row, str(tmp_path / "d.png"),
+                             title="VWAP | ALL", month_values=month)
+    assert os.path.getsize(out) > 5_000
+
+
+def test_distribution_on_an_empty_series_still_writes_a_file(tmp_path):
+    _, row = _band_row()
+    out = plots.distribution(np.array([]), row, str(tmp_path / "d.png"),
+                             title="empty")
+    assert os.path.exists(out)
+
+
+def test_calibration_writes_a_non_empty_png(tmp_path):
+    curve = pd.DataFrame({
+        "k": [3.0, 4.0, 5.0], "n_months": [12] * 3,
+        "median_flags": [14.0, 5.0, 2.0], "mean_flags": [15.0, 6.0, 2.5],
+        "min_flags": [6, 1, 0], "max_flags": [31, 12, 5],
+        "months_over_target": [12, 4, 0]})
+    out = plots.calibration(curve, str(tmp_path / "c.png"), target=5,
+                            chosen_k=4.0)
+    assert os.path.exists(out)
+    assert os.path.getsize(out) > 5_000
+
+
+def test_calibration_without_a_chosen_k_still_renders(tmp_path):
+    curve = pd.DataFrame({
+        "k": [3.0, 4.0], "n_months": [12, 12],
+        "median_flags": [40.0, 30.0], "mean_flags": [41.0, 31.0],
+        "min_flags": [20, 15], "max_flags": [60, 45],
+        "months_over_target": [12, 12]})
+    out = plots.calibration(curve, str(tmp_path / "c.png"), target=5,
+                            chosen_k=None)
+    assert os.path.exists(out)
+
+
+def test_calibration_on_an_empty_curve_writes_a_file_saying_so(tmp_path):
+    curve = pd.DataFrame(columns=calibrate.CURVE_COLS)
+    out = plots.calibration(curve, str(tmp_path / "c.png"), target=5)
+    assert os.path.exists(out)
+
+
+def test_breach_counts_are_measured_against_the_band():
+    x = np.array([-10.0, -2.0, 0.0, 2.0, 10.0])
+    assert plots.breach_counts(x, lo=-1.0, hi=1.0) == (2, 2)
+
+
+def test_breach_counts_and_overflow_counts_are_different_quantities():
+    # The regression this pins: the chart draws the axis WIDER than the band,
+    # so an order can breach the band and still be on scale. Reporting the
+    # off-scale count where the breach count belongs makes the numbers on the
+    # chart fail to add up to the subtitle.
+    # -1.2 and +1.2 breach the band but sit inside the padded axis, which is
+    # exactly the population the two counts disagree about.
+    x = np.array([-3.0, -1.2, 0.0, 1.2, 3.0])
+    lo, hi = -1.0, 1.0
+    pad = 0.16 * (hi - lo)
+    n_low, n_high = plots.breach_counts(x, lo, hi)
+    _, below, above = plots.clip_with_overflow(x, lo - pad, hi + pad)
+    assert (n_low, n_high) == (2, 2)      # four orders breach the band
+    assert (below, above) == (1, 1)       # only two are off the drawn axis
+    assert n_low + n_high > below + above
+
+
+def test_breach_counts_are_zero_without_a_band():
+    x = np.array([1.0, 2.0, 3.0])
+    assert plots.breach_counts(x, lo=np.nan, hi=1.0) == (0, 0)
+    assert plots.breach_counts(np.array([]), lo=-1.0, hi=1.0) == (0, 0)
+
+
+def test_breach_counts_ignore_non_finite_values():
+    x = np.array([np.nan, np.inf, -np.inf, 5.0])
+    assert plots.breach_counts(x, lo=-1.0, hi=1.0) == (0, 1)
+
+
+def test_qq_writes_a_non_empty_png(tmp_path):
+    values, _ = _band_row()
+    out = plots.qq(values, str(tmp_path / "qq.png"), title="VWAP | ALL")
+    assert os.path.exists(out)
+    assert os.path.getsize(out) > 5_000
+
+
+def test_qq_subsamples_a_large_book_without_dropping_the_tails(tmp_path):
+    values, _ = _band_row()
+    out = plots.qq(values, str(tmp_path / "qq.png"), title="big",
+                   max_points=500)
+    assert os.path.exists(out)
+
+
+def test_qq_on_too_few_points_still_writes_a_file(tmp_path):
+    out = plots.qq(np.array([1.0]), str(tmp_path / "qq.png"), title="tiny")
+    assert os.path.exists(out)
+
+
+def test_distribution_can_omit_the_normal_overlay(tmp_path):
+    values, row = _band_row()
+    a = plots.distribution(values, row, str(tmp_path / "a.png"), title="with")
+    b = plots.distribution(values, row, str(tmp_path / "b.png"), title="without",
+                           show_normal=False)
+    assert os.path.getsize(a) != os.path.getsize(b)

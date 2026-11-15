@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# Fit and review outputs contain order-level data: never commit them.
+fits/
+review/
+# Never commit extracts. Synthetic lab results are the only exception.
+*.csv
+*.xlsx
+*.xls
+*.parquet
+!lab/results/*.csv
+*.log
