@@ -14,7 +14,7 @@ import pandas as pd
 from cept import config, schema as s
 from cept.fit import zscores
 
-COLS = ["benchmark", "size", "side", "detected_A", "detected_B"]
+COLS = ["group", "size", "side", "detected_A", "detected_B"]
 
 
 def injected_detection(cells: dict, df: pd.DataFrame,
@@ -23,7 +23,7 @@ def injected_detection(cells: dict, df: pd.DataFrame,
     rng = np.random.default_rng(seed)
     rows = []
     for bench, cm in cells.items():
-        g = df[df[s.BENCHMARK] == bench]
+        g = df[df[s.GROUP] == bench]
         g = g.iloc[rng.choice(len(g), min(n, len(g)), replace=False)]
         _, _, disp = zscores(cm, g)
         y = g[s.METRIC].to_numpy(float)
@@ -34,7 +34,7 @@ def injected_detection(cells: dict, df: pd.DataFrame,
                     da, db = z < -cm.thr["A"]["lo"], z < -cm.thr["B"]["lo"]
                 else:
                     da, db = z > cm.thr["A"]["hi"], z > cm.thr["B"]["hi"]
-                rows.append({"benchmark": bench, "size": int(m), "side": side,
+                rows.append({"group": bench, "size": int(m), "side": side,
                              "detected_A": float(da.mean()),
                              "detected_B": float(db.mean())})
     return pd.DataFrame(rows, columns=COLS)

@@ -19,8 +19,9 @@ def test_silent_on_ordinary_month():
 def test_fires_on_strategy_decay():
     r = _run("S6_strategy_decay")
     hit = r[r["alert"]]
-    assert ((hit["benchmark"] == "TWAP") & (hit["feature"] == "ALL")).any()
-    assert (hit["benchmark"] == "VWAP").sum() == 0
+    # one pooled group, but the decaying strategy is still singled out
+    assert ((hit["feature"] == "strategy") & (hit["bucket"] == "TWAP")).any()
+    assert not ((hit["feature"] == "strategy") & (hit["bucket"] == "VWAP")).any()
 
 
 def test_fires_on_high_pr_decay():

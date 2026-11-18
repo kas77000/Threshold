@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from cept import config
 from cept.fit import CellModel
 
-MODEL_VERSION = 1
+MODEL_VERSION = 2   # 2: strategy groups, cohort baselines
 _POLICY_KEYS = ["RARITY_A", "FLOOR_A", "RARITY_B", "FLOOR_B", "COHORT_T",
                 "POLICY_RATIONALE", "MIN_CELL_N", "MIN_SYMBOL_N", "TAIL_PROBS"]
 

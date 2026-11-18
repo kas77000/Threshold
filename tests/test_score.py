@@ -25,10 +25,10 @@ def test_tiers_on_mixture_month():
     assert (a["excess"] > 0).all()
 
 
-def test_no_model_for_unfitted_cell():
+def test_no_model_for_unfitted_group():
     y, m, cells = _setup()
-    out = score.score_orders({"VWAP": cells["VWAP"]}, m)
-    assert (out.loc[out[schema.BENCHMARK] == "TWAP", "tier"] == "NO_MODEL").all()
+    out = score.score_orders({"OTHER_GROUP": cells["TWAP_VWAP"]}, m)
+    assert (out["tier"] == "NO_MODEL").all()
 
 
 def test_tags():
@@ -74,3 +74,14 @@ def test_metric_is_named_once_in_config():
     inv = {v: k for k, v in config.COLUMN_MAP.items()}
     assert inv[s.METRIC] == config.METRIC_COLUMN
     assert inv[s.SLIPPAGE_BPS] == config.METRIC_BPS_COLUMN
+
+
+def test_each_order_carries_its_band_in_spreads():
+    y, m, cells = _setup()
+    out = score.score_orders(cells, m)
+    x = out["perf_in_spreads"]
+    assert (out["band_lo"] < out["expected_perf"]).all()
+    assert (out["expected_perf"] < out["band_hi"]).all()
+    assert (out["watch_lo"] > out["band_lo"]).all()
+    outside = (x < out["band_lo"]) | (x > out["band_hi"])
+    assert (outside == (out["tier"] == "A")).all()

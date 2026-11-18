@@ -21,9 +21,9 @@ def _dq_counts(exc: pd.DataFrame) -> dict:
 def cmd_check(a) -> int:
     raw = load.read_any(a.csv)
     print(f"file: {a.csv}   rows: {len(raw):,}")
-    print("\n--- STRATEGY -> BENCHMARK ---")
+    print("\n--- STRATEGY -> GROUP ---")
     for k, n in raw["Strategy"].astype(str).str.strip().value_counts().items():
-        print(f"  {k:<20}{n:>9,}  -> {config.benchmark_for(k) or '*** UNMAPPED ***'}")
+        print(f"  {k:<20}{n:>9,}  -> {config.group_for(k) or '*** UNMAPPED ***'}")
     print("\n--- MARKETS ---")
     print(raw["Sym"].astype(str).str[-2:].str.upper().value_counts().to_string())
     df, rep = load.prepare(raw, market=a.market)
@@ -45,7 +45,7 @@ def cmd_fit(a) -> int:
     clean, exc = dq.split(df)
     cells, skipped = fit.fit_all(clean, min_cell_n=a.min_cell_n)
     if not cells:
-        print(f"No cell has >= {a.min_cell_n} clean orders: {skipped}",
+        print(f"No strategy group has >= {a.min_cell_n} clean orders: {skipped}",
               file=sys.stderr)
         return 2
     os.makedirs(a.out, exist_ok=True)
@@ -63,8 +63,8 @@ def cmd_fit(a) -> int:
     power_df = power.injected_detection(cells, clean)
     sens_df = sensitivity.vol_sensitivity(clean, clean, cells)
     scored = score.score_orders(cells, clean)
-    coef = pd.concat([pd.DataFrame({"benchmark": b,
-                                    "condition": feature_names(cm.include_surprise),
+    coef = pd.concat([pd.DataFrame({"group": b,
+                                    "condition": feature_names(cm.include_surprise, cm.strategies),
                                     "centre": cm.ls.loc_coef,
                                     "log_dispersion": cm.ls.sc_coef})
                       for b, cm in cells.items()])
@@ -77,11 +77,12 @@ def cmd_fit(a) -> int:
                         ("in_sample_scored.csv", scored)]:
         frame.to_csv(os.path.join(a.out, name), index=False)
     for b, cm in cells.items():
-        plots.qq_plot(scored.loc[scored[s.BENCHMARK] == b, "z"],
+        plots.qq_plot(scored.loc[scored[s.GROUP] == b, "z"],
                       os.path.join(a.out, f"qq_{b}.png"), f"{b} conditional z")
         plots.coef_plot(cm, os.path.join(a.out, f"coef_{b}.png"))
     report.write_fit_summary(os.path.join(a.out, "summary.md"), cells, meta,
-                             lomo_df, power_df, sens_df, rep, _dq_counts(exc))
+                             lomo_df, power_df, sens_df, rep, _dq_counts(exc),
+                             scored)
     print(f"\nWrote {os.path.join(a.out, 'model.json')}")
     return 0
 

@@ -14,7 +14,7 @@ def test_renames_and_derives():
     df, rep = load.prepare(_raw())
     assert schema.METRIC in df and schema.FILL_RATE in df
     assert set(df[schema.MARKET]) == {"HK"}
-    assert set(df[schema.BENCHMARK]) == {"TWAP", "VWAP"}
+    assert set(df[schema.GROUP]) == {"TWAP_VWAP"}
     assert rep.rows_kept == len(df)
 
 

@@ -76,7 +76,7 @@ def prepare(raw: pd.DataFrame, market: str | None = None
     sym = df[schema.SYMBOL].astype(str).str.strip()
     df[schema.MARKET] = sym.str[-2:].str.upper()
     df.loc[sym.isin(["", "nan", "None"]), schema.MARKET] = pd.NA
-    df[schema.BENCHMARK] = df[schema.ALGO].map(config.benchmark_for)
+    df[schema.GROUP] = df[schema.ALGO].map(config.group_for)
     df[schema.ORDER_DATE] = pd.to_datetime(df[schema.ORDER_DATE],
                                            errors="coerce").dt.normalize()
     for col in schema.NUMERIC:
@@ -91,7 +91,7 @@ def prepare(raw: pd.DataFrame, market: str | None = None
         (MISSING_ORDER_ID, df[schema.ORDER_ID].isna() | oid.isin(["", "nan", "None"])),
         (MISSING_SYMBOL, df[schema.MARKET].isna()),
         (MISSING_DATE, df[schema.ORDER_DATE].isna()),
-        (UNMAPPED_STRATEGY, df[schema.BENCHMARK].isna()),
+        (UNMAPPED_STRATEGY, df[schema.GROUP].isna()),
         (OTHER_MARKET, other_mkt),
         (MISSING_METRIC, df[schema.METRIC].isna()),
     ]

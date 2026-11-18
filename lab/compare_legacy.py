@@ -54,10 +54,7 @@ def one(sc, seed, work):
     _run([PY, "legacy/run.py", "score", "--csv", mp, "--bands",
           os.path.join(lf, "bands.json"), "--out", ls, "--no-plots"])
     cf, cs = os.path.join(work, "cfit"), os.path.join(work, "cscore")
-    # Thin books (S10) are below CEPT's production MIN_CELL_N of 5000; use
-    # the legacy default of 2000 so both methods fit the same cells.
-    min_n = ["--min-cell-n", "2000"] if sc == "S10_thin_book" else []
-    _run([PY, "-m", "cept", "fit", "--csv", yp, "--out", cf, "--no-lomo"] + min_n)
+    _run([PY, "-m", "cept", "fit", "--csv", yp, "--out", cf, "--no-lomo"])
     _run([PY, "-m", "cept", "score", "--csv", mp, "--model",
           os.path.join(cf, "model.json"), "--out", cs])
 

@@ -62,11 +62,12 @@ def _tags(df: pd.DataFrame, voltyp_lookup: np.ndarray) -> list[str]:
 
 def score_orders(cells: dict, df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    for c in ("expected_perf", "expected_disp", "z", "excess"):
+    for c in ("expected_perf", "expected_disp", "band_lo", "band_hi",
+              "watch_lo", "watch_hi", "z", "excess"):
         out[c] = np.nan
     out["tier"] = "NO_MODEL"
     out["tags"] = ""
-    for bench, g in df.groupby(s.BENCHMARK):
+    for bench, g in df.groupby(s.GROUP):
         cm = cells.get(str(bench))
         if cm is None:
             continue
@@ -78,6 +79,12 @@ def score_orders(cells: dict, df: pd.DataFrame) -> pd.DataFrame:
                           np.where(z > 0, z - a["hi"], -z - a["lo"]), np.nan)
         out.loc[g.index, "expected_perf"] = mu
         out.loc[g.index, "expected_disp"] = disp
+        # This order's own band, in the metric's units (spreads): Tier A
+        # outside [band_lo, band_hi]; Tier B outside [watch_lo, watch_hi].
+        out.loc[g.index, "band_lo"] = mu - a["lo"] * disp
+        out.loc[g.index, "band_hi"] = mu + a["hi"] * disp
+        out.loc[g.index, "watch_lo"] = mu - b["lo"] * disp
+        out.loc[g.index, "watch_hi"] = mu + b["hi"] * disp
         out.loc[g.index, "z"] = z
         out.loc[g.index, "tier"] = tier
         out.loc[g.index, "excess"] = excess
@@ -88,14 +95,14 @@ def score_orders(cells: dict, df: pd.DataFrame) -> pd.DataFrame:
 def drift(cells: dict, df: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for bench, cm in cells.items():
-        g = df[df[s.BENCHMARK] == bench]
+        g = df[df[s.GROUP] == bench]
         for f, fit_med in cm.medians.items():
             mm = float(g[f].median()) if f in g and g[f].notna().any() else np.nan
             pct = (100.0 * (mm - fit_med) / abs(fit_med)
                    if np.isfinite(mm) and fit_med else np.nan)
-            rows.append({"benchmark": bench, "feature": f, "fit_median": fit_med,
+            rows.append({"group": bench, "feature": f, "fit_median": fit_med,
                          "month_median": mm, "pct_change": pct,
                          "warn": bool(np.isfinite(pct)
                                       and abs(pct) > config.DRIFT_THRESHOLD_PCT)})
-    return pd.DataFrame(rows, columns=["benchmark", "feature", "fit_median",
+    return pd.DataFrame(rows, columns=["group", "feature", "fit_median",
                                        "month_median", "pct_change", "warn"])

@@ -5,7 +5,7 @@ ALGO = "algo"
 SYMBOL = "symbol"
 MARKET = "market"
 ORDER_DATE = "order_date"
-BENCHMARK = "benchmark"
+GROUP = "group"                     # strategy group: one model, one threshold
 
 METRIC = "perf_in_spreads"          # ePvwap/Sprd, as supplied
 

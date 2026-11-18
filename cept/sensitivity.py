@@ -14,7 +14,7 @@ from cept import config, schema as s
 from cept.fit import fit_all
 from cept.score import score_orders
 
-COLS = ["order_id", "benchmark", "perf_in_spreads", "z_with", "z_without",
+COLS = ["order_id", "group", "perf_in_spreads", "z_with", "z_without",
         "vol_surprise", "pct_adv", "high_adv"]
 
 
@@ -26,11 +26,11 @@ def vol_sensitivity(fit_df: pd.DataFrame, target_df: pd.DataFrame,
     hit = (b["tier"] == "A") & (a["tier"] != "A")
     rows = []
     for i in target_df.index[hit.to_numpy()]:
-        cm = cells[target_df.loc[i, s.BENCHMARK]]
+        cm = cells[target_df.loc[i, s.GROUP]]
         vt = cm.voltyp.lookup(target_df.loc[[i]])[0]
         adv = float(target_df.loc[i, s.PCT_ADV])
         rows.append({"order_id": target_df.loc[i, s.ORDER_ID],
-                     "benchmark": target_df.loc[i, s.BENCHMARK],
+                     "group": target_df.loc[i, s.GROUP],
                      "perf_in_spreads": float(target_df.loc[i, s.METRIC]),
                      "z_with": float(a.loc[i, "z"]),
                      "z_without": float(b.loc[i, "z"]),

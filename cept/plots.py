@@ -28,13 +28,13 @@ def qq_plot(z, path, title: str) -> None:
 
 
 def coef_plot(cm, path) -> None:
-    names = feature_names(cm.include_surprise)
+    names = feature_names(cm.include_surprise, cm.strategies)
     fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
     for ax, coef, ttl in ((axes[0], cm.ls.loc_coef, "expected performance"),
                           (axes[1], cm.ls.sc_coef, "log expected dispersion")):
         ax.barh(names, coef)
         ax.axvline(0, color="grey", lw=0.8)
-        ax.set_title(f"{cm.benchmark}: {ttl}\n(effect of +1 sd of condition)")
+        ax.set_title(f"{cm.group}: {ttl}\n(effect of +1 sd of condition)")
     fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)

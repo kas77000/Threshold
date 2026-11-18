@@ -33,7 +33,17 @@ COLUMN_MAP = {
     "Rev30min": schema.REVERSION,
 }
 
-ALGO_BENCHMARK = {"VWAP": "VWAP", "TWAP": "TWAP", "TMX": "TWAP"}
+# ---- strategy groups: ONE model and ONE threshold per group ---------------
+# Strategies that share the same performance behaviour are pooled into one
+# group. To add a strategy, map it to a group; to split or merge groups,
+# change the right-hand side. A strategy not listed is excluded from the run
+# and reported by name -- never guessed into a group.
+# The cohort test still checks every strategy separately inside its group.
+STRATEGY_GROUP = {
+    "VWAP": "TWAP_VWAP",
+    "TWAP": "TWAP_VWAP",
+    "TMX": "TWAP_VWAP",
+}
 
 DEFAULT_MARKET = "HK"
 
@@ -75,10 +85,10 @@ HIGH_PR_ABOVE = 30.0
 HIGH_ADV_PCT = 10.0
 
 
-def benchmark_for(strategy) -> str | None:
+def group_for(strategy) -> str | None:
     if strategy is None:
         return None
     key = str(strategy).strip().upper()
     if not key or key in {"NAN", "NONE"}:
         return None
-    return ALGO_BENCHMARK.get(key)
+    return STRATEGY_GROUP.get(key)

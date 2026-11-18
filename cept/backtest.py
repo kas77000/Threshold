@@ -15,7 +15,7 @@ from cept import config, schema as s
 from cept.fit import fit_all, predicted_count
 from cept.score import score_orders
 
-COLS = ["benchmark", "n", "pred_A", "real_A", "p_A", "pred_B", "real_B", "p_B"]
+COLS = ["group", "n", "pred_A", "real_A", "p_A", "pred_B", "real_B", "p_B"]
 
 
 def kupiec_pvalue(n: int, x: int, p: float) -> float:
@@ -33,13 +33,13 @@ def kupiec_pvalue(n: int, x: int, p: float) -> float:
 
 def month_table(cells: dict, scored: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    for bench, g in scored[scored["tier"] != "NO_MODEL"].groupby(s.BENCHMARK):
+    for bench, g in scored[scored["tier"] != "NO_MODEL"].groupby(s.GROUP):
         cm = cells[str(bench)]
         n = len(g)
         pa, pb = predicted_count(cm, n, "A"), predicted_count(cm, n, "B")
         ra = int((g["tier"] == "A").sum())
         rb = int(g["tier"].isin(["A", "B"]).sum())
-        rows.append({"benchmark": str(bench), "n": n,
+        rows.append({"group": str(bench), "n": n,
                      "pred_A": pa, "real_A": ra,
                      "p_A": kupiec_pvalue(n, ra, pa / n),
                      "pred_B": pb, "real_B": rb,

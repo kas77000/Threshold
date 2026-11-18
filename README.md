@@ -5,6 +5,7 @@ order's own conditions**, at policy-fixed rarities. The previous method
 (PerfThreshold, raw mean ± 4σ) is kept in `legacy/` and runs on the same file.
 
 Documents:
+- `docs/sfc-method-note.md`: **short note for the SFC meeting**: still 4σ, the noise found, and what removes it
 - `docs/cept-briefing.md`: management briefing on the new method
 - `docs/legacy-vs-cept.md`: technical comparison with measured results
 - `docs/superpowers/specs/2026-11-15-conditional-threshold-design.md`: full design and evidence
@@ -45,7 +46,7 @@ Everything a user edits is in **`cept/config.py`**:
 |---|---|---|
 | `METRIC_COLUMN`, `METRIC_UNITS`, `METRIC_BPS_COLUMN` | The performance metric: the **only** place it is named. To use another strategy family, change these three lines, e.g. an arrival-price metric and its bps column. Set `METRIC_BPS_COLUMN = None` if there is no bps partner column. `score` refuses (exit 2) a model fitted on a different metric, so refit after changing it. | `ePvwap/Sprd`, `spreads`, `Pvwap` |
 | `COLUMN_MAP` | Your extract's column names → internal names. Edit the **left** side if your headers differ. | The names in §2 |
-| `ALGO_BENCHMARK` | Which `Strategy` values are in scope, and their benchmark. A strategy not listed is **excluded and reported by name**, never guessed. | `VWAP→VWAP`, `TWAP→TWAP`, `TMX→TWAP` |
+| `STRATEGY_GROUP` | Which `Strategy` values are in scope, and their **strategy group**. Each group gets **one model and one threshold**. Pool strategies that behave alike by giving them the same group name. Inside a group, strategy is still a model condition and each strategy has its own cohort test. A strategy not listed is **excluded and reported by name**, never guessed. | `VWAP`, `TWAP`, `TMX` → `TWAP_VWAP` |
 | `DEFAULT_MARKET` | Market kept (last 2 characters of `Sym`, e.g. `0700 HK`). Can also be set per run with `--market`. | `HK` |
 | Policy values (`RARITY_A`, `FLOOR_A`, `RARITY_B`, `FLOOR_B`, `COHORT_T`) | The thresholds. **Do not change them to get fewer alerts**: they are the governance record and are copied into every model file. | 1/10,000 & 4σ; 1/1,000 & 3σ; \|t\| > 4 |
 
@@ -62,7 +63,7 @@ fit year (12 months) and a separate file for each month to score.
 | Column | Meaning / units | CEPT | Legacy |
 |---|---|---|---|
 | `aggrTgtId` | Order ID | **required** | **required** |
-| `Strategy` | Algo name (TWAP, VWAP, TMX…), mapped by `ALGO_BENCHMARK` | **required** | **required** |
+| `Strategy` | Algo name (TWAP, VWAP, TMX…), mapped by `STRATEGY_GROUP` | **required** | **required** |
 | `Sym` | Symbol with market suffix, e.g. `0700 HK` | **required** | **required** |
 | `Date` | Order date | **required** | **required** |
 | `ePvwap/Sprd` | Performance vs interval VWAP, in spreads (the metric) | **required** | **required** |
@@ -104,7 +105,7 @@ python -m cept score --csv month.csv --model fits/HK_2025-07_2026-06/model.json 
 
 Options:
 - `--market HK`: market to keep (`check`, `fit`)
-- `fit --min-cell-n 5000`: minimum clean orders per benchmark
+- `fit --min-cell-n 5000`: minimum clean orders per strategy group
 - `fit --no-lomo`: skip the leave-one-month-out back-test (faster, for trials only)
 
 `score` refuses, with exit code 2, a month that overlaps the fit year,
@@ -112,7 +113,7 @@ because the result would be circular.
 
 **`fit` writes:**
 - `model.json`: the frozen model with its policy values
-- `summary.md`: the model card. Read it first: tail df per side, thresholds, coefficients, back-test.
+- `summary.md`: the model card. Read section 1 first: **the threshold** for each strategy group, and what it means in spreads for an easy, a typical and a hard order. Section 2 lists the checks; everything else is in the appendix.
 - `lomo_backtest.csv`: predicted vs realised alerts per month, with Kupiec p-values
 - `detection_power.csv`: share of planted bad orders caught, by size
 - `vol_sensitivity.csv`: results with the same-day volatility term removed
@@ -124,7 +125,7 @@ because the result would be circular.
 - `watchlist_tierB.csv`: light-touch review
 - `cohort.csv`: strategy and segment deterioration test
 - `drift.csv`: this month's conditions vs the fit year's
-- `scored_orders.csv`: every order with z, expected performance and tags; sort by `z` for sampling
+- `scored_orders.csv`: every order with its expected performance, **its own band in spreads** (`band_lo`/`band_hi` = outlier, `watch_lo`/`watch_hi` = watch list), z and tags; sort by `z` for sampling
 - `data_exceptions.csv`, `backtest.csv`, `summary.md`
 
 ---

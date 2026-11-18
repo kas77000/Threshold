@@ -50,7 +50,9 @@ For each order, in four steps:
 2. **Estimate what was expected.** A statistical model, fitted on a full year
    of our own orders, gives the expected performance and the normal range of
    variation for an order with these characteristics: volatility, duration,
-   spread, size versus daily volume, participation rate, auction share and side.
+   spread, size versus daily volume, participation rate, auction share, side
+   and strategy. TWAP and VWAP share **one threshold**; strategies that behave
+   alike can be grouped the same way later.
 3. **Flag only what is rare.** An order is a Tier A alert if its performance
    was rarer than **1 in 10,000** for its conditions, and never closer than
    **4 standard deviations** from what was expected. A Tier B watch list

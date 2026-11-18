@@ -8,6 +8,17 @@ strategies extend the same method (§9).
 Evidence: `lab/` in this folder (`python -m lab.bench`, `python -m lab.frontier`),
 results frozen in `lab/results/*_2026-11-15.txt`.
 
+> **Revision 2026-11-18: one threshold per strategy group.** Cells are now
+> *strategy groups* (`config.STRATEGY_GROUP`), not benchmarks. TWAP and VWAP
+> share one model and one threshold by default.
+> - Strategy enters the model as a condition, so pooling does not blur the
+>   strategies' normal differences. Pooling blindly cut detection of 5σ
+>   misses from over 60% to 41% in the lab.
+> - The cohort test runs per strategy, and compares each cohort with its own
+>   fit-year level.
+> - Each scored order now carries its band in spreads (`band_lo`, `band_hi`).
+> - Where this document says "per benchmark", read "per strategy group".
+
 ---
 
 ## 1. The problem, stated so it can be defended

@@ -5,6 +5,12 @@ same-day Parkinson vol over the fit year) and the day's SURPRISE relative to
 it. Same-day vol is partly caused by a large order itself; keeping the
 surprise as its own term is what lets sensitivity.py show exactly which
 alerts it clears.
+
+Strategy: a group pools several strategies under ONE threshold. Each strategy
+other than the most frequent (the reference) gets an indicator, so the model
+can still learn that one strategy normally runs slightly differently. If the
+strategies in a group really perform alike, these coefficients come out near
+zero -- and that number is the evidence the pooling is justified.
 """
 
 from __future__ import annotations
@@ -18,9 +24,20 @@ FEATURE_NAMES = ["log_vol_typ", "log_vol_surprise", "log_dur", "log_spread",
                  "log_pct_adv", "sqrt_pr", "open_frac", "close_frac", "is_buy"]
 
 
-def feature_names(include_surprise: bool) -> list[str]:
-    return [n for n in FEATURE_NAMES
-            if include_surprise or n != "log_vol_surprise"]
+def feature_names(include_surprise: bool, strategies=()) -> list[str]:
+    return ([n for n in FEATURE_NAMES
+             if include_surprise or n != "log_vol_surprise"]
+            + [f"strategy_{a}" for a in list(strategies)[1:]])
+
+
+def strategy_levels(df: pd.DataFrame) -> list[str]:
+    """Strategies in the group, most frequent first (the reference)."""
+    vc = _algo(df).value_counts()
+    return sorted(vc.index, key=lambda a: (-vc[a], a))
+
+
+def _algo(df: pd.DataFrame) -> pd.Series:
+    return df[s.ALGO].astype(str).str.strip().str.upper()
 
 
 class VolTypical:
@@ -49,7 +66,7 @@ class VolTypical:
 
 
 def design(df: pd.DataFrame, voltyp: VolTypical,
-           include_surprise: bool = True) -> np.ndarray:
+           include_surprise: bool = True, strategies=()) -> np.ndarray:
     vt = voltyp.lookup(df)
     vol = df[s.VOLATILITY].to_numpy(dtype=float)
     cols = [np.log(vt)]
@@ -65,4 +82,7 @@ def design(df: pd.DataFrame, voltyp: VolTypical,
         df[s.SIDE].astype(str).str.upper().str.startswith("B")
           .to_numpy(dtype=float),
     ]
+    if len(strategies) > 1:
+        algo = _algo(df).to_numpy()
+        cols += [(algo == a).astype(float) for a in list(strategies)[1:]]
     return np.column_stack(cols)

@@ -18,11 +18,11 @@ def test_round_trip_and_policy(tmp_path):
     p = tmp_path / "model.json"
     persist.write_model(p, cells, meta)
     blob = json.loads(p.read_text())
-    assert blob["policy"]["RARITY_A"] == 1e-4 and blob["version"] == 1
+    assert blob["policy"]["RARITY_A"] == 1e-4 and blob["version"] == persist.MODEL_VERSION
     cells2, meta2 = persist.read_model(p)
-    g = m[m[schema.BENCHMARK] == "VWAP"]
-    assert np.allclose(fit.zscores(cells["VWAP"], g)[0],
-                       fit.zscores(cells2["VWAP"], g)[0])
+    g = m
+    assert np.allclose(fit.zscores(cells["TWAP_VWAP"], g)[0],
+                       fit.zscores(cells2["TWAP_VWAP"], g)[0])
     assert meta2["fit_end"] == "2026-06-30"
 
 

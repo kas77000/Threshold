@@ -22,7 +22,7 @@ python -m cept score       --csv month.csv --model fits/cept/model.json --out re
 | | Legacy PerfThreshold | CEPT |
 |---|---|---|
 | Question asked | Is this order's `ePvwap/Sprd` far from **the book's** average? | Is this order's `ePvwap/Sprd` far from **what was expected for this order's conditions**? |
-| Band | Per benchmark: `MAX(mean + 4σ, P99.5)` upper, mirrored lower, on the raw metric | Per benchmark and per order: `expected(conditions) ± threshold × expected dispersion(conditions)` |
+| Band | Per benchmark (TWAP and VWAP each get their own): `MAX(mean + 4σ, P99.5)` upper, mirrored lower, on the raw metric | **One threshold per strategy group** (TWAP and VWAP together by default), applied per order: `expected(conditions) ± threshold × expected dispersion(conditions)`. Each order's band is in `scored_orders.csv` as `band_lo`/`band_hi` |
 | Threshold | k = 4 on the raw σ | Per side `MAX(4, Student-t quantile at 1 in 10,000)` (Tier A); `MAX(3, 1 in 1,000)` (Tier B, watch list) |
 
 ## 2. Stage by stage
@@ -31,11 +31,11 @@ python -m cept score       --csv month.csv --model fits/cept/model.json --out re
 |---|---|---|---|
 | Loading and row accounting | `rows_in = kept + Σ dropped`, named reasons, unmapped strategies excluded and named | Same design, plus an explicit market filter counted as a drop reason | Unchanged guarantee: no row disappears silently |
 | Data quality | Only missing ID/symbol/date/metric | Record rules: spread implausible, metric ≠ Pvwap/Sprd, PR ∉ (0,100], Dur ≤ 0, %OPEN+%CLOSE > 100, %Adv ≤ 0, Vol ≤ 0, FR ∉ (0,100], missing condition. Rules test the **record**, never the performance | A data error is routed to a data-exception file, not into the review queue; it also no longer inflates σ for everyone else |
-| Expected performance | One mean per benchmark | Robust (Huber) regression on difficulty: typical vol, vol surprise, duration, spread, %ADV, √PR, %OPEN, %CLOSE, side | A large, illiquid, high-participation order is compared with what such orders normally get |
+| Expected performance | One mean per benchmark | Robust (Huber) regression on difficulty: typical vol, vol surprise, duration, spread, %ADV, √PR, %OPEN, %CLOSE, side, and strategy within the group (so pooling TWAP and VWAP under one threshold does not blur their normal difference) | A large, illiquid, high-participation order is compared with what such orders normally get |
 | Dispersion | One σ per benchmark | Robust regression of log\|residual\| on the same conditions | A 5-spread miss is routine on a 300-minute, 40%-PR order and extreme on a 20-minute, 2%-PR one |
 | Standardisation | `(x − mean) / σ`, classical, so the year's own outliers widen σ | Conditional z, then re-centred and rescaled by median/MAD | Catastrophic orders in the fit year no longer mask others |
 | Tail | Assumes 4σ is rare; P99.5 floor | Student-t fitted by quantile matching on the 50–99.5th percentiles of \|z\| (robust to contamination). Threshold never below 4σ | The "1 in 10,000" claim is true, not assumed; on a near-normal book Tier A is exactly 4σ |
-| Second line | — | Cohort test: mean z per strategy and per quintile of each condition (incl. fill rate), alert if \|t\| > 4 | Catches gradual or segment-wide deterioration that never produces a single extreme order |
+| Second line | — | Cohort test: mean z per strategy and per quintile of each condition (incl. fill rate), compared with the **same cohort's level in the fit year**, alert if \|t\| > 4 | Catches gradual or segment-wide deterioration that never produces a single extreme order |
 | Excluded from model | n/a | `FR`, `%POST`, `Rev30min` (outcomes) | The model cannot "explain away" bad execution with variables the algo controls |
 | Monitoring | LOMO calibration curve, normality table, drift | LOMO backtest with predicted vs realised counts and Kupiec p-values, injected-order detection power, same-day-vol sensitivity refit, drift | Every fit produces the evidence a reviewer will ask for |
 | Leakage guard | Refuses to score a window overlapping the fit | Same | Unchanged |
@@ -67,7 +67,7 @@ comparison.
 Both programs were run through their real command-line interfaces
 (`python -m lab.compare_legacy --seeds 2`). Raw results:
 `lab/results/compare_legacy_raw.csv`, summary:
-`lab/results/compare_legacy_2026-11-16.txt`.
+`lab/results/compare_legacy_2026-11-18.txt`. CEPT runs with its default single strategy group (TWAP and VWAP under one threshold). Legacy keeps its own design, one band per benchmark. The earlier run with CEPT split per benchmark gave the same picture: `compare_legacy_2026-11-16_per_benchmark.txt`.
 
 Setup:
 - Each scenario has a 12-month fit year and one held-out month of 2,500 orders, averaged over 2 seeds.
@@ -87,20 +87,20 @@ How to read the columns:
 |---|---|---|---|---|---|---|---|---|
 | S1 clean, near-normal book | 6.0 | 0.0 | 100% | 6.0 | 0.0 | 100% | 3.5 | 0 |
 | S2 ordinary mixture (main case) | 20.5 | 16.5 | 67% | **6.0** | **0.0** | **100%** | 2.5 | 0 |
-| S4 data errors in the book | 3.5 | 1.0 | **0%** (2.5 data errors in queue) | 6.0 | 0.0 | 100% | 3.0 | 0 |
-| S5 volatile month (1.7× vol) | **52.0** | 48.0 | 67% | 6.0 | 0.0 | 100% | 3.5 | 0 |
-| S6 TWAP strategy decays | 25.5 | 23.0 | 42% | 7.0 | 1.0 | 100% | 4.5 | **30** |
+| S4 data errors in the book | 3.5 | 1.0 | **0%** (2.5 data errors in queue) | 6.0 | 0.0 | 100% | 2.5 | 0 |
+| S5 volatile month (1.7× vol) | **52.0** | 48.0 | 67% | 6.0 | 0.0 | 100% | 2.5 | 0 |
+| S6 TWAP strategy decays | 25.5 | 23.0 | 42% | 7.0 | 1.0 | 100% | 5.0 | **30.5** (incl. the TWAP strategy cohort) |
 | S7 catastrophic orders in fit year | 8.0 | 6.0 | 33% | 6.0 | 0.0 | 100% | 3.0 | 0 |
-| S8 high-PR orders decay | 22.5 | 15.5 | 67% | 8.5 | 0.0 | 100% | 18.0 | **18** |
-| S10 thin book (600 orders/month)* | 6.0 | 3.0 | 50% | 5.0 | 0.0 | 83% | 1.0 | 0 |
-| S3 genuinely fat tails (t4) † | 24.5 | 21.5 | 50% | 0.0 | 0.0 | 0% | 3.0 (25% caught) | 0 |
-| S9 model misspecified † | 17.0 | 16.5 | 8% | 2.0 | 2.0 | 0% | 8.5 (75% caught) | 0 |
-| S11 misspecified + fat † | 23.5 | 21.0 | 42% | 0.0 | 0.0 | 0% | 2.0 | 0 |
+| S8 high-PR orders decay | 22.5 | 15.5 | 67% | 8.0 | 0.0 | 100% | 17.5 | **12.5** |
+| S10 thin book (600 orders/month)* | 6.0 | 3.0 | 50% | 5.5 | 0.0 | 92% | 0.5 | 0 |
+| S3 genuinely fat tails (t4) † | 24.5 | 21.5 | 50% | 0.0 | 0.0 | 0% | 2.5 (17% caught) | 0 |
+| S9 model misspecified † | 17.0 | 16.5 | 8% | 2.0 | 2.0 | 0% | 8.0 (67% caught) | 0 |
+| S11 misspecified + fat † | 23.5 | 21.0 | 42% | 0.0 | 0.0 | 0% | 2.5 | 0 |
 
-\* S10 has 3,600 orders per benchmark a year. That is below CEPT's production
-minimum of 5,000 per cell, so this run used `--min-cell-n 2000`, the legacy
-default. In production CEPT refuses such a cell rather than fitting it
-silently.
+\* S10 has 7,200 orders a year. Pooling TWAP and VWAP into one group keeps
+it above CEPT's production minimum of 5,000 per group, which split per
+benchmark (3,600 each) it was not. A group below the minimum is refused, not
+fitted silently.
 
 † Hard cases. In these books, a 4.5–7σ deviation is not rare among ordinary
 orders, so no method can flag it without over-alerting. Legacy does not catch
@@ -118,7 +118,7 @@ What the table shows:
    errors present it catches **0%**: the bad records inflate σ and then take
    the queue places themselves.
 3. **CEPT Tier A is the planted bad orders and almost nothing else** in every
-   well-specified scenario. That is 0–1 false alerts a month with 83–100% of
+   well-specified scenario. That is 0–1 false alerts a month with 92–100% of
    bad orders caught.
 4. **Gradual decay (S6, S8) is caught by the cohort test.** Legacy has no
    equivalent; it only shows a larger queue.
