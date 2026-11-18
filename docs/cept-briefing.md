@@ -9,8 +9,8 @@
   efficiently, with thresholds we can justify and review.
 - Our current approach (average ± 4 standard deviations over a year of
   orders) flags too many orders, and **most of those orders are not bad
-  executions**. They are difficult orders (illiquid stocks, large size,
-  long duration) behaving normally.
+  executions**. They are difficult orders (volatile stocks, high
+  participation, long duration) behaving normally.
 - The new method, **CEPT** (Conditional Expected-Performance Threshold), asks
   a better question: *was this order's performance abnormal given how hard
   this order was?* It still uses the familiar "4 standard deviations" rule,
@@ -27,8 +27,8 @@ delivery driver by the same delivery time, whether they drive across town or
 across the country. The long trips look like "outliers" every day, and a slow
 short trip is never noticed.
 
-Our book is like that. A 5-minute order in a liquid stock and a full-day order
-at 40% of volume in an illiquid stock are measured against the same band. The
+Our book is like that. A 20-minute order in a calm stock and a full-day order
+at 30% of volume in a volatile stock are measured against the same band. The
 result:
 
 1. Many false alerts, each needing a written justification.

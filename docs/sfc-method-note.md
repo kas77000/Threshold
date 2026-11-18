@@ -1,113 +1,144 @@
 # Execution outlier detection: method note
 
-*For discussion with the SFC. HK equities, TWAP/VWAP algorithmic orders.*
+*HK equities, TWAP/VWAP algorithmic orders.*
 
 ---
 
-## 1. The rule: mean ± 4 sigma
+## 1. The rule has not changed
 
-An order is an **outlier** when its execution performance (versus interval
-VWAP, measured in spreads) is more than **4 standard deviations** from the
-mean.
+> An order is an **outlier** if its performance is more than **4 sigma** away
+> from the **mean**.
 
-This is the same rule as before. The thresholds are fixed in advance, before
-the data is examined, and are never adjusted to obtain a particular number of
+Performance is measured against the interval VWAP, in spreads. The threshold
+is fixed in advance and is never adjusted to obtain a particular number of
 outliers.
 
-## 2. What we observed
+## 2. What we found
 
-When we applied the rule to a full year of orders, **too many orders were
-flagged, and on review most of them were not poor executions.** We traced
-this noise to four sources:
+We first used **one mean and one sigma for all orders**. That flagged many
+orders that, on review, were not poor executions.
 
-| # | Source of noise | Effect |
-|---|---|---|
-| 1 | **Data errors**: a small number of impossible records (e.g. participation above 100%, zero duration, a performance figure inconsistent with its slippage) | They appear as outliers themselves, and they inflate the sigma for every other order |
-| 2 | **Easy and difficult orders measured on one scale**: a 10-minute order in a liquid stock and a full-day order at 40% of volume in an illiquid stock were compared with the same mean and sigma | Difficult orders are flagged routinely even when well executed, while a poor execution on an easy order stays hidden |
-| 3 | **A few extreme orders in the reference year** | They pull the mean and widen the sigma, so the band they produce no longer reflects normal execution |
-| 4 | **Market conditions**: in a volatile month, all orders naturally disperse more | The number of outliers rises with the market, not with execution quality |
+The reason is that our orders are not alike. A 20-minute order in a calm
+stock and a full-day order at 30% of volume in a volatile stock behave very
+differently, even when both are executed well. The longer the order and the
+more the price moves during it, the further its result can land from VWAP. A
+miss of 5 spreads is:
 
-## 3. What we did: one correction for each source of noise
+- **normal** for a full-day, high-participation order in a volatile stock;
+- **abnormal** for a short order in a calm stock.
 
-The 4-sigma rule is unchanged. We changed what the mean and the sigma are
-computed on.
+With one mean and one sigma for everyone:
 
-**1. Check the data before any statistics.**
-Every record is tested for plausibility before the calculation. Impossible
-records go to a separate data-exception list for operations to correct; they
-are neither counted as outliers nor used to compute the band. The tests check
-whether the **record** is possible. They never test whether the performance
-is good or bad, so they cannot be used to remove a genuine outlier.
+- difficult orders are flagged **even when well executed** (noise);
+- a poor execution on an easy order **goes unnoticed**.
 
-**2. Compare each order with comparable orders.**
-The mean and the sigma are no longer one number for the whole book. They are
-estimated **for each order's own conditions**:
-- stock volatility, both its usual level and that day's
-- order duration
-- bid-ask spread
-- order size relative to daily volume
-- participation rate
-- share executed in the opening and closing auctions
-- side
-- strategy
+## 3. What we changed: the mean and sigma come from comparable orders
 
-The order is then flagged if it is more than 4 sigma from *its* expected
-performance. It is still mean ± 4σ, applied like-for-like. An analogy: a
-delivery is judged against the expected time for *its* route, not against
-the average of all deliveries.
+The threshold is still **4 sigma**. The only change is that each order is
+compared with the mean and sigma **of orders like it**.
 
-Only factors that make an order harder to execute are used. Outcomes such as
-fill rate are deliberately **not** used, so the model cannot explain away a
-poor execution.
+Illustration (test data, VWAP orders):
 
-**3. Estimate the mean and sigma robustly.**
-We use standard robust statistics (Huber regression, median-based scaling).
-A handful of extreme orders in the reference year therefore cannot distort
-the band for everyone else, and genuine outliers stay visible.
+| Order | Mean of comparable orders | Sigma of comparable orders | Outlier if outside (4 sigma) | An order at −5 spreads is… |
+|---|---|---|---|---|
+| Easy | −0.2 | 0.8 | −3.6 to +3.1 | **an outlier** |
+| Typical | −0.3 | 1.6 | −6.9 to +6.0 | normal |
+| Difficult | −0.1 | 3.1 | −13.0 to +12.3 | normal |
 
-**4. Verify that "4 sigma" really is rare on our data.**
-Under a normal distribution, a 4-sigma event occurs about once in 16,000
-cases. We check on our own data that orders beyond the threshold are indeed
-rarer than **1 in 10,000**. If our data shows fatter tails, the threshold is
-widened just enough to keep that rarity. It is **never narrower than 4
-sigma**. On our test data, the threshold came out at 4.0–4.2 sigma.
+"Comparable" means similar conditions:
+- the stock's volatility;
+- the order's duration;
+- the bid-ask spread;
+- the order's size relative to daily volume;
+- the participation rate;
+- the share executed in the opening and closing auctions;
+- side and strategy.
 
-## 4. Safeguards that stay in place
+We use only factors that make an order harder to execute. Results of the
+execution, such as fill rate, are deliberately **not** used, so poor execution
+cannot be explained away.
 
-- **One threshold per strategy group.** TWAP and VWAP are assessed with one
-  threshold. Strategies with similar behaviour can be added to a group later.
-- **Fixed for a year.** The model is fitted once on a full year and frozen.
-  Each later month is scored against it, so any deterioration shows up.
-- **Gradual deterioration is monitored separately.** A monthly test checks
-  whether a whole strategy, or a whole type of order, has become worse than
-  it was in the reference year, even when no single order is extreme.
-- **Checked every time.** Each fit produces:
-  - a back-test of predicted against actual outliers, month by month;
-  - a detection test, in which deliberately bad orders are planted and we
-    measure how many are caught;
-  - a sensitivity check.
-- **Full traceability.** Every order in the extract is accounted for. Each
-  outlier is reported with its expected performance, its own band and the
-  context (e.g. partial fill, volatility spike).
+### Worked example
 
-## 5. Effect
+Three VWAP orders, judged first by the old method and then by the new one.
+The figures are illustrative, taken from test data.
 
-We tested both methods on simulated order books where the answer is known.
-Each test month contained 6 deliberately bad executions:
+| | Order 1 | Order 2 | Order 3 |
+|---|---|---|---|
+| Profile | 20 minutes, calm stock, 5% of volume | Full day, volatile stock, 30% of volume | Full day, volatile stock, 30% of volume |
+| Performance vs VWAP | **−5 spreads** | **−5 spreads** | **−11 spreads** |
 
-| Test month | Before: orders flagged | of which not bad | bad ones caught | **Now: orders flagged** | of which not bad | bad ones caught |
+**Old method: one mean and one sigma for all orders.**
+The mean of all orders is −0.2 and the sigma is 2.6, so every order has the
+same band: −0.2 ± 4 × 2.6, i.e. **−10.6 to +10.2 spreads**.
+
+| | Order 1 | Order 2 | Order 3 |
+|---|---|---|---|
+| Inside −10.6 / +10.2? | yes | yes | **no** |
+| Result | not flagged | not flagged | **flagged** |
+
+**New method: the mean and sigma of comparable orders.**
+Each order's distance from its mean is counted in sigma:
+(performance − mean) ÷ sigma. It is flagged beyond 4.
+
+| | Order 1 | Order 2 | Order 3 |
+|---|---|---|---|
+| Mean of comparable orders | −0.2 | −0.1 | −0.1 |
+| Sigma of comparable orders | 0.8 | 3.1 | 3.1 |
+| Distance from the mean | (−5 + 0.2) ÷ 0.8 = **−6.0 sigma** | (−5 + 0.1) ÷ 3.1 = −1.6 sigma | (−11 + 0.1) ÷ 3.1 = −3.5 sigma |
+| Its band (4 sigma) | −3.4 to +3.0 | −12.5 to +12.3 | −12.5 to +12.3 |
+| Result | **flagged** | not flagged | not flagged |
+
+What changed:
+- **Order 1** is a genuinely poor execution. A calm 20-minute order should
+  never be 5 spreads off. The old method **missed it**; the new method
+  catches it.
+- **Order 3** looked extreme only because it was compared with easy orders.
+  For a full-day, high-participation order in a volatile stock, −11 spreads is
+  within normal range. The old method **flagged it** (noise); the new method
+  does not.
+- **Order 2** is normal under both methods.
+
+Same rule (4 sigma), same orders. The new method compares each order with
+the right reference.
+
+## 4. Three additional clean-ups
+
+1. **Data errors are removed first.** Impossible records (e.g. participation
+   above 100%, zero duration) are sent to operations for correction. They are
+   neither outliers nor used to compute the mean and sigma. The checks are on
+   the record, never on whether performance is good or bad.
+2. **A few extreme orders cannot distort the mean and sigma.** We use standard
+   statistical methods that are not pulled by a handful of extreme values.
+3. **We check that 4 sigma is really rare on our data.** If needed, the
+   threshold is widened slightly, but **it is never below 4 sigma**. On test
+   data it came out at 4.0–4.2.
+
+## 5. What stays in place
+
+- **One threshold per strategy group:** TWAP and VWAP together.
+- **Fixed for a year:** the mean and sigma are estimated once on a full year,
+  then applied to each later month.
+- **Checked every month:** predicted against actual number of outliers.
+- **Gradual decline is also monitored:** for example, a whole strategy getting
+  worse even though no single order is extreme.
+- **Traceable:** every outlier is reported with its mean, its sigma and its
+  band.
+
+## 6. Effect on test data
+
+Each test month contained 6 deliberately poor executions. The figures are
+averages over two simulated order books.
+
+| Test month | Before: orders flagged | of which not poor | poor ones caught | **Now: orders flagged** | of which not poor | poor ones caught |
 |---|---|---|---|---|---|---|
 | Normal month | 20.5 | 16.5 | 67% | **6** | **0** | **100%** |
 | Volatile month | 52 | 48 | 67% | **6** | **0** | **100%** |
 | Month with data errors | 3.5 | 1 | 0% | **6** | **0** | **100%** |
 
-The figures are averages over two simulated books. Fewer orders to justify,
-and more of the genuinely bad ones are caught. The decisive check is the run
-on our real HK data.
+The decisive check will be the run on our real HK data.
 
-## 6. In one sentence
+## 7. In one sentence
 
-> We still flag orders beyond 4 sigma. We first remove data errors, then
-> measure each order against the mean and sigma of comparable orders,
-> estimated robustly, and we verify that the threshold is as rare as it
-> claims to be.
+> We still flag orders beyond 4 sigma. We now compare each order with the mean
+> and sigma of comparable orders, after removing data errors.
